@@ -1,2 +1,0 @@
-id,text,label,tokens,tokens_no_stops,raw_count,idf_features,rawPrediction,probability,prediction
-0,Hey ;) @remy,0.0,"['hey', ';)', '@remy']","['hey', ';)', '@remy']","(20,[3],[1.0])","(20,[3],[0.28768207245178085])","[-3.7605521683143968,3.7605521683143968]","[0.02274166857188525,0.9772583314281148]",1.0
