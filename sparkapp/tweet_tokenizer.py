@@ -3,6 +3,7 @@ This file wraps the nltk TweetTokenizer into a pyspark Transformer class, which 
 pipeline model instead of processing our input text for training/testing seperately from our pipeline.
 """
 
+import string
 from pyspark.ml import Transformer
 from pyspark.ml.util import DefaultParamsReadable, DefaultParamsWritable
 from pyspark.sql.functions import udf, col
@@ -15,8 +16,12 @@ class TweetTokenizerTransformer(Transformer, DefaultParamsReadable, DefaultParam
         self.inputCol = inputCol
         self.outputCol = outputCol
         self.tokenizer = TweetTokenizer(preserve_case=False)
+
+        self.punctuation = set(string.punctuation) | {'…', ''', '...', '"', '"', '''}
+
+        #Tokenize and remove punctuation.
         self.udf_tokenize = udf(
-            lambda text: self.tokenizer.tokenize(text) if text else [],
+            lambda text: [token for token in self.tokenizer.tokenize(text) if token not in self.punctuation] if text else [],
             ArrayType(StringType())
             )
 
