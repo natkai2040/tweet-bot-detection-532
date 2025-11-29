@@ -51,12 +51,12 @@ def train_pipeline(spark, train_json):
 
     # First, tokenize to seperate string into list of semantic units
     # TweetTokenizer pays attention to text such as emoticons and arrows, and combines them into a single unit.
-    tweet_tokenizer = TweetTokenizerTransformer(inputCol="text", outputCol="tokens")
+    tweet_tokenizer = TweetTokenizerTransformer(inputCol="text", outputCol="tokens_no_punc")
 
     #Removing stopwords
     # Stopwords = common words which don't denote meaning (i.e. a, the, is)
     # Removing these tokens may boost model performance
-    remover = StopWordsRemover(inputCol="tokens", outputCol="tokens_no_stops")
+    remover = StopWordsRemover(inputCol="tokens_no_punc", outputCol="tokens_no_stops")
 
     # Convert tokens w/o stopwords to Term Frequency Vector -> Inverse Doc Frequency Vector
     cv = CountVectorizer(inputCol="tokens_no_stops", outputCol="raw_count")

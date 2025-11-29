@@ -17,9 +17,12 @@ class TweetTokenizerTransformer(Transformer, DefaultParamsReadable, DefaultParam
         self.outputCol = outputCol
         self.tokenizer = TweetTokenizer(preserve_case=False)
 
-        self.punctuation = set(string.punctuation) | {'…', ''', '...', '"', '"', '''}
+        # List of punctuation to remove from tokens based on string.punctuation and edited to omit
+        # characters which may frequently appear in tweets.
+        stripped_punc = ["’", '“', '”', "'", '"', '#', '\'', "-", "/", ':', ';', '[', '\'', ']', '_', '.']
+        self.punctuation = set(stripped_punc)
 
-        #Tokenize and remove punctuation.
+        #Tokenize and remove punctuation
         self.udf_tokenize = udf(
             lambda text: [token for token in self.tokenizer.tokenize(text) if token not in self.punctuation] if text else [],
             ArrayType(StringType())
