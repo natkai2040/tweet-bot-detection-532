@@ -11,5 +11,6 @@ spark = SparkSession.builder.appName("BotClassifier").getOrCreate()
 training_data_subset = "Twibot-22/data_subset/training_subset.json"
 test_data_subset = "Twibot-22/data_subset/test_subset.json"
 
+
 model = pipeline.train_pipeline(spark, training_data_subset)
 pipeline.inference_pipeline(spark, model, test_data_subset)

@@ -8,6 +8,9 @@ from pyspark.ml.feature import CountVectorizer, IDF, StopWordsRemover
 from pyspark.ml.classification import LogisticRegression
 from pyspark.ml import Pipeline
 from sparkapp.tweet_tokenizer import TweetTokenizerTransformer
+from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score
+import matplotlib.pyplot as plt
+import numpy as np
 
 def preprocess_data(spark: SparkSession, input_json):
     '''
@@ -40,14 +43,21 @@ def preprocess_data(spark: SparkSession, input_json):
     df_final = df_formatted.withColumn("label",
                                          when(col("label") == "human", 1).otherwise(0))
 
-    print()
-    print("PREPROCESSED DATA:")
-    df_final.show(truncate=True)
-    print()
-    return df_final
+    # split by labels
+    human_df = df_final.filter(col("label") == 1)
+    bot_df   = df_final.filter(col("label") == 0)
+    human_train, human_test = human_df.randomSplit([0.8, 0.2], seed=42)
+    bot_train, bot_test     = bot_df.randomSplit([0.8, 0.2], seed=42)
 
-def train_pipeline(spark, train_json):
-    df_training = preprocess_data(spark, train_json)
+    # combine dfs
+    train_df = human_train.union(bot_train)
+    test_df  = human_test.union(bot_test)
+
+    print("PREPROCESSED TRAINING DATA:")
+    train_df.show(truncate=True)
+    return train_df, test_df
+
+def train_pipeline(spark, df_training):
 
     # First, tokenize to seperate string into list of semantic units
     # TweetTokenizer pays attention to text such as emoticons and arrows, and combines them into a single unit.
@@ -74,14 +84,91 @@ def train_pipeline(spark, train_json):
     model = pipeline.fit(df_training)
     return model
 
-def inference_pipeline(spark, model, test_json):
+def inference_pipeline(spark, model, df_test):
     # Running inference on our pipeline model
-    df_test = preprocess_data(spark, test_json)
-    output_df = model.transform(df_test)
-    # Save run to CSV, not optimal for large datasets but acceptable for small datasets.
-    output_df.toPandas().to_csv("runs/test_output.csv", index=False)
+    output_df = model.transform(df_test)    
+    output_df.select("label", "prediction") \
+            .write.mode("overwrite").csv("runs/test_output")
 
-    print()
-    print("PREDICTION: (0.0 = bot, 1.0 = human)")
-    output_df.select("text", "label", "prediction").show(truncate=True)
-    print()
+    
+    return output_df
+    
+
+
+def calculate_metrics(df, model, labels=None, outfile="confusion_matrix.png"):
+
+    #FEATURE IMPORTANCE
+    tokenizer, remover, cv_model, idf_model, lr_model = model.stages
+    vocab = cv_model.vocabulary  
+    idf_weights = idf_model.idf.toArray()  
+    lr_coeffs = lr_model.coefficients.toArray()
+    
+    importances = np.abs(lr_coeffs * idf_weights)
+    feature_importance = list(zip(vocab, importances))
+    feature_importance = sorted(feature_importance, key=lambda x: x[1], reverse=True)
+    feature_importance = sorted(feature_importance,
+                                key=lambda x: x[1],
+                                reverse=True)
+
+    top_k = 10
+    top_features = feature_importance[:top_k]
+    words = [w for w, _ in top_features]
+    scores = [s for _, s in top_features]
+
+    plt.figure(figsize=(8, 6))
+    y_pos = np.arange(len(words))
+    plt.barh(y_pos, scores)
+    plt.yticks(y_pos, words)
+    plt.gca().invert_yaxis()
+    plt.xlabel("Importance")
+    plt.title(f"Top {top_k} Most Important Features")
+    plt.tight_layout()
+    plt.savefig("feature_importances.png", dpi=300)
+    plt.close()
+
+
+    #ACCURACY, PRECISION, RECALL, CONFUSION MATRIX
+
+    tp = df.filter((col("label") == 1) & (col("prediction") == 1)).count()
+    tn = df.filter((col("label") == 0) & (col("prediction") == 0)).count()
+    fp = df.filter((col("label") == 0) & (col("prediction") == 1)).count()
+    fn = df.filter((col("label") == 1) & (col("prediction") == 0)).count()
+
+    accuracy = df.filter(col("label") == col("prediction")).count() / df.count()
+    precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+    recall    = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+    cm = np.array([[tn, fp],
+                   [fn, tp]])
+
+    #plot
+    fig, ax = plt.subplots(figsize=(6, 5))
+    im = ax.imshow(cm, interpolation="nearest")
+    ax.figure.colorbar(im, ax=ax)
+
+    labels = ["Bot", "Human"]  # 0, 1
+
+    ax.set(
+        xticks=np.arange(len(labels)),
+        yticks=np.arange(len(labels)),
+        xticklabels=labels,
+        yticklabels=labels,
+        xlabel="Predicted Label",
+        ylabel="True Label",
+        title="Confusion Matrix"
+    )
+
+    for i in range(2):
+        for j in range(2):
+            ax.text(j, i, cm[i, j], ha="center", va="center", color="white")
+
+    plt.tight_layout()
+    plt.savefig(outfile, dpi=300)
+    plt.close()
+    
+    return {
+        "accuracy": accuracy,
+        "precision": precision,
+        "recall": recall,
+        "confusion_matrix": cm,
+    }
+
