@@ -15,6 +15,9 @@ def modify_test_json():
     with open(TEST_DATA_SUBSET, 'r') as f:
         data = json.load(f)
 
+
+model = pipeline.train_pipeline(spark, training_data_subset)
+pipeline.inference_pipeline(spark, model, test_data_subset)
     # Randomly sampled tweet from json file generated from tokenizer.ipynb, tweets_with_labels.json
     data['sampled_test_tweet'] = {
         'label': 'bot',
