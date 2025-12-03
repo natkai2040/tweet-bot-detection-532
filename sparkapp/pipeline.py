@@ -89,12 +89,8 @@ def inference_pipeline(spark, model, df_test):
     output_df = model.transform(df_test)    
     output_df.select("label", "prediction") \
             .write.mode("overwrite").csv("runs/test_output")
-
-    
     return output_df
     
-
-
 def calculate_metrics(df, model, labels=None, outfile="confusion_matrix.png"):
 
     #FEATURE IMPORTANCE

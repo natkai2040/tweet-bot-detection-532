@@ -9,7 +9,7 @@ from pyspark.sql.session import SparkSession
 spark = SparkSession.builder.appName("BotClassifier").getOrCreate()
 
 # Data is taken from json file generated from tokenizer.ipynb, tweets_with_labels.json
-data = "/mnt/c/Users/ryanz/Documents/CS532/final_project/tweet-bot-detection-532/tweets_with_labels.json"
+data = "tweets_with_labels.json"
 
 df_train, df_test = pipeline.preprocess_data(spark, data)
 
