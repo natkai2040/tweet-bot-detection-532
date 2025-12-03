@@ -21,3 +21,5 @@ model = pipeline.train_pipeline(spark, df_train)
 output = pipeline.inference_pipeline(spark, model, df_test)
 
 metrics = pipeline.calculate_metrics(output, model, labels=["Human", "Bot"])
+
+print("Metrics and visualizations saved to 'figs/' directory")
