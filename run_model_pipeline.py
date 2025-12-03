@@ -6,7 +6,11 @@ For: Ryan <3
 import sparkapp.pipeline as pipeline
 from pyspark.sql.session import SparkSession
 
-spark = SparkSession.builder.appName("BotClassifier").getOrCreate()
+spark = SparkSession.builder \
+    .appName("BotClassifier") \
+    .config("spark.driver.memory", "4g") \
+    .config("spark.executor.memory", "4g") \
+    .getOrCreate()
 
 # Data is taken from json file generated from tokenizer.ipynb, tweets_with_labels.json
 data = "tweets_with_labels.json"

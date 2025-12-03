@@ -54,7 +54,7 @@ def preprocess_data(spark: SparkSession, input_json):
     test_df  = human_test.union(bot_test)
 
     print("PREPROCESSED TRAINING DATA:")
-    train_df.show(truncate=True)
+    # train_df.show(truncate=True)
     return train_df, test_df
 
 def train_pipeline(spark, df_training):

@@ -39,7 +39,7 @@ def modify_test_json():
 
 if __name__ == '__main__':
     modify_test_json()
-    spark = SparkSession.builder.appName("BotClassifier").getOrCreate()
+    spark = SparkSession.builder.appName("TestBotClassifier").getOrCreate()
 
     df_train, df_test = pipeline.preprocess_data(spark, DUMMY_DATA_SUBSET)
 
