@@ -2,6 +2,7 @@
 This script provides a pipeline for both training and evaluating text with a Classification Model
 """
 
+import unicodedata
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import map_from_arrays, array, lit, explode, col, when
 from pyspark.ml.feature import CountVectorizer, IDF, StopWordsRemover
@@ -11,10 +12,11 @@ from sparkapp.tweet_tokenizer import TweetTokenizerTransformer
 from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score
 import matplotlib.pyplot as plt
 import numpy as np
+import emoji
 
 def preprocess_data(spark: SparkSession, input_json):
     '''
-    Given a JSON in the format defined in tokenizer.ipynb (key (tweet ID): {label: "human/bot", tweet: "tweetText}),
+    Given a JSON in the format defined in data_preprocessing.ipynb (key (tweet ID): {label: "human/bot", tweet: "tweetText}),
     generate a Spark DF which organizes the data into the following columns: [tweet_id, text, label]
     '''
     df = spark.read.option("multiline", "true").json(input_json)
@@ -53,7 +55,7 @@ def preprocess_data(spark: SparkSession, input_json):
     train_df = human_train.union(bot_train)
     test_df  = human_test.union(bot_test)
 
-    print("PREPROCESSED TRAINING DATA:")
+    print("Preprocessed Training Data:")
     # train_df.show(truncate=True)
     return train_df, test_df
 
@@ -90,9 +92,14 @@ def inference_pipeline(spark, model, df_test):
     output_df.select("label", "prediction") \
             .write.mode("overwrite").csv("runs/test_output")
     return output_df
-    
-def calculate_metrics(df, model, labels=None, outfile="confusion_matrix.png"):
 
+def contains_devanagari_unicodedata(text):
+    for char in text:
+        if 'DEVANAGARI' in unicodedata.name(char, '').upper():
+            return True
+    return False
+
+def calculate_metrics(df, model, labels=None, outfile="figs/confusion_matrix.png"):
     #FEATURE IMPORTANCE
     tokenizer, remover, cv_model, idf_model, lr_model = model.stages
     vocab = cv_model.vocabulary  
@@ -105,10 +112,16 @@ def calculate_metrics(df, model, labels=None, outfile="confusion_matrix.png"):
     feature_importance = sorted(feature_importance,
                                 key=lambda x: x[1],
                                 reverse=True)
+    
+    # Filter out Devanagari characters since they can't be displayed in figure
+    feature_importance_filtered = [
+        (word, score) for word, score in feature_importance 
+            if not contains_devanagari_unicodedata(word)
+    ]
 
     top_k = 10
-    top_features = feature_importance[:top_k]
-    words = [w for w, _ in top_features]
+    top_features = feature_importance_filtered[:top_k]
+    words = [emoji.demojize(w) for w, _ in top_features]
     scores = [s for _, s in top_features]
 
     plt.figure(figsize=(8, 6))
@@ -119,22 +132,20 @@ def calculate_metrics(df, model, labels=None, outfile="confusion_matrix.png"):
     plt.xlabel("Importance")
     plt.title(f"Top {top_k} Most Important Features")
     plt.tight_layout()
-    plt.savefig("feature_importances.png", dpi=300)
+    plt.savefig("figs/feature_importances.png", dpi=300)
     plt.close()
 
 
     #ACCURACY, PRECISION, RECALL, CONFUSION MATRIX
 
-    tp = df.filter((col("label") == 1) & (col("prediction") == 1)).count()
-    tn = df.filter((col("label") == 0) & (col("prediction") == 0)).count()
-    fp = df.filter((col("label") == 0) & (col("prediction") == 1)).count()
-    fn = df.filter((col("label") == 1) & (col("prediction") == 0)).count()
-
-    accuracy = df.filter(col("label") == col("prediction")).count() / df.count()
-    precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-    recall    = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-    cm = np.array([[tn, fp],
-                   [fn, tp]])
+    predictions = df.select("label", "prediction").collect()
+    y_true = [row.label for row in predictions]
+    y_pred = [row.prediction for row in predictions]
+    
+    accuracy = accuracy_score(y_true, y_pred)
+    precision = precision_score(y_true, y_pred, zero_division=0)
+    recall = recall_score(y_true, y_pred, zero_division=0)
+    cm = confusion_matrix(y_true, y_pred, labels=[0, 1])
 
     #plot
     fig, ax = plt.subplots(figsize=(6, 5))

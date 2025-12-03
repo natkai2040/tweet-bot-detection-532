@@ -8,12 +8,12 @@ from pyspark.sql.session import SparkSession
 
 spark = SparkSession.builder \
     .appName("BotClassifier") \
-    .config("spark.driver.memory", "4g") \
-    .config("spark.executor.memory", "4g") \
+    .config("spark.driver.memory", "8g") \
+    .config("spark.executor.memory", "8g") \
     .getOrCreate()
 
-# Data is taken from json file generated from tokenizer.ipynb, tweets_with_labels.json
-data = "tweets_with_labels.json"
+# Data is taken from json file generated from data_preprocessing.ipynb, tweets_with_labels.json
+data = "data/tweets_with_labels.json"
 
 df_train, df_test = pipeline.preprocess_data(spark, data)
 

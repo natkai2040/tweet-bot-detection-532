@@ -7,14 +7,14 @@ import sparkapp.pipeline as pipeline
 from pyspark.sql.session import SparkSession
 import json
 
-DUMMY_DATA_SUBSET = "dummy_data.json"
+DUMMY_DATA_SUBSET = "data/dummy_data.json"
 
 def modify_test_json():
     # Load JSON from file
     with open(DUMMY_DATA_SUBSET, 'r') as f:
         data = json.load(f)
 
-        # Randomly sampled tweet from json file generated from tokenizer.ipynb, tweets_with_labels.json
+        # Randomly sampled tweet from json file generated from data_preprocessing.ipynb, data/tweets_with_labels.json
         data['sampled_test_tweet'] = {
             'label': 'bot',
             'text': 'Medical collections are likely less of a tail event than many expect--being both more common and more modest in size than implied by some of the popular discourse.\n\nFor example, in 2020 the median medical collection was $310. https://t.co/hKczgDQ9gP'

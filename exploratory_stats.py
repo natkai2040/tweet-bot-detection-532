@@ -14,7 +14,7 @@ spark = SparkSession.builder.appName("TweetAnalysisByLabel").getOrCreate()
 # ============================================================
 # 2. Load JSON (dict-of-dicts format)
 # ============================================================
-with open("tweets_with_labels.json", "r") as f:
+with open("data/tweets_with_labels.json", "r") as f:
     raw = json.load(f)
 
 records = []
