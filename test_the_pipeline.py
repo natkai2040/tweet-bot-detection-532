@@ -5,6 +5,8 @@ For: Ryan <3
 
 import sparkapp.pipeline as pipeline
 from pyspark.sql.session import SparkSession
+from pyspark.ml import PipelineModel
+
 
 spark = SparkSession.builder \
     .appName("BotClassifier") \
@@ -18,8 +20,7 @@ save_model_path = "C:/User/ryanz/Documents/CS532/final_project/new_final_project
 
 df_train, df_test = pipeline.preprocess_data(spark, data)
 
-model = pipeline.train_pipeline(spark, df_train)
-model.write().overwrite().save(save_model_path)
+model = PipelineModel.load(save_model_path)
 
 output = pipeline.inference_pipeline(spark, model, df_test)
 metrics = pipeline.calculate_metrics(output, model, labels=["Human", "Bot"])
