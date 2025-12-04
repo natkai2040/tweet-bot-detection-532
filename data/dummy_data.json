@@ -1,0 +1,26 @@
+{
+    "sampled_test_tweet": {
+        "label": "bot",
+        "text": "Medical collections are likely less of a tail event than many expect--being both more common and more modest in size than implied by some of the popular discourse.\n\nFor example, in 2020 the median medical collection was $310. https://t.co/hKczgDQ9gP"
+    },
+    "punc_test": {
+        "label": "bot",
+        "text": "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~\u2026\u2019...\u201c\u201d< = >"
+    },
+    "api_test_1": {
+        "label": "bot",
+        "text": "This is a cooool #dummysmiley: :-) :-P <3 and some arrows < > -> <--"
+    },
+    "t1502228666197151745": {
+        "label": "human",
+        "text": "RT @SSPCentre: @shubh_vishnoi a PhD student who works in SSPC\u2019s modelling theme, received the @UL President Volunteer Award (PVA)-2021, giv\u2026"
+    },
+    "t1502228648581115906": {
+        "label": "human",
+        "text": "RT @UL: Researchers call for mandatory reporting on cyberattacks\n\nA Lero research team based at UL said mandatory cybercrime reporting woul\u2026"
+    },
+    "t1499022705756151818": {
+        "label": "bot",
+        "text": "https://t.co/9GCmZnwCb8"
+    }
+}
