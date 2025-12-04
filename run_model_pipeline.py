@@ -14,7 +14,7 @@ spark = SparkSession.builder \
 
 # Data is taken from json file generated from data_preprocessing.ipynb, tweets_with_labels.json
 data = "data/tweets_with_labels.json"
-save_model_path = "C:/User/ryanz/Documents/CS532/final_project/new_final_project/tweet-bot-detection-532/bot_classification_model"
+save_model_path = "bot_classification_model"
 
 df_train, df_test = pipeline.preprocess_data(spark, data)
 

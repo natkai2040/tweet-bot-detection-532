@@ -2,8 +2,6 @@
 This script provides a pipeline for both training and evaluating text with a Classification Model
 """
 
-import json
-import os
 import unicodedata
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import map_from_arrays, array, lit, explode, col, when
@@ -106,40 +104,16 @@ def plot_training_metrics(training_summary):
     objective_history = training_summary.objectiveHistory
     iterations = list(range(len(objective_history)))
     
-    # Create figure with two subplots
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
-    
-    # Plot 1: Loss over time
-    ax1.plot(iterations, objective_history, 'b-', linewidth=2, marker='o', markersize=4)
-    ax1.set_xlabel('Iteration', fontsize=12)
-    ax1.set_ylabel('Loss (Objective)', fontsize=12)
-    ax1.set_title('Training Loss Over Time', fontsize=14, fontweight='bold')
-    ax1.grid(True, alpha=0.3)
-    ax1.set_xlim(0, max(iterations))
-    
-    # Plot 2: Accuracy on training set over time (if available)
-    # Note: Logistic Regression doesn't track per-iteration accuracy by default
-    # We'll show convergence instead
-    if len(objective_history) > 1:
-        # Calculate relative improvement
-        improvements = [0]
-        for i in range(1, len(objective_history)):
-            if objective_history[i-1] != 0:
-                improvement = abs(objective_history[i] - objective_history[i-1]) / abs(objective_history[i-1])
-                improvements.append(improvement)
-            else:
-                improvements.append(0)
-        
-        ax2.plot(iterations, improvements, 'g-', linewidth=2, marker='o', markersize=4)
-        ax2.set_xlabel('Iteration', fontsize=12)
-        ax2.set_ylabel('Relative Improvement', fontsize=12)
-        ax2.set_title('Training Convergence Rate', fontsize=14, fontweight='bold')
-        ax2.grid(True, alpha=0.3)
-        ax2.set_xlim(0, max(iterations))
-        ax2.set_yscale('log')
-    
+    # Figure: Loss over time
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.plot(iterations, objective_history)
+    ax.set_xlabel('Iteration', fontsize=12)
+    ax.set_ylabel('Loss (Objective)', fontsize=12)
+    ax.set_title('Training Loss Over Time', fontsize=14, fontweight='bold')
+    ax.grid(True, alpha=0.3)
+    ax.set_xlim(0, max(iterations))
     plt.tight_layout()
-    plt.savefig("figs/training_metrics.png", dpi=300)
+    plt.savefig("figs/training_loss.png", dpi=300)
     plt.close()
     
     print(f"Training completed in {len(objective_history)} iterations")
@@ -152,63 +126,6 @@ def inference_pipeline(spark, model, df_test):
             .write.mode("overwrite").csv("runs/test_output")
 
     return output_df
-
-def plot_validation_curve(model, df_train, df_test):
-    """
-    Plot accuracy on train/test sets over different regularization parameters
-    This shows overfitting/underfitting
-    """
-    from pyspark.ml.classification import LogisticRegression
-    from pyspark.ml import Pipeline
-    
-    # Get pipeline stages except LR
-    tokenizer, remover, cv_model, idf_model, _ = model.stages
-    
-    reg_params = [0.001, 0.01, 0.1, 1.0, 10.0]
-    train_accuracies = []
-    test_accuracies = []
-    
-    print("\nCalculating validation curve...")
-    for reg_param in reg_params:
-        # Create new LR with this regularization
-        lr = LogisticRegression(
-            featuresCol="idf_features",
-            labelCol="label",
-            maxIter=100,
-            regParam=reg_param
-        )
-        
-        # Create pipeline with existing transformers
-        pipeline = Pipeline(stages=[tokenizer, remover, cv_model, idf_model, lr])
-        temp_model = pipeline.fit(df_train)
-        
-        # Calculate accuracies
-        train_pred = temp_model.transform(df_train)
-        test_pred = temp_model.transform(df_test)
-        
-        train_acc = train_pred.filter(col("label") == col("prediction")).count() / train_pred.count()
-        test_acc = test_pred.filter(col("label") == col("prediction")).count() / test_pred.count()
-        
-        train_accuracies.append(train_acc)
-        test_accuracies.append(test_acc)
-        
-        print(f"RegParam={reg_param}: Train Acc={train_acc:.4f}, Test Acc={test_acc:.4f}")
-    
-    # Plot validation curve
-    plt.figure(figsize=(10, 6))
-    plt.plot(reg_params, train_accuracies, 'b-o', label='Training Accuracy', linewidth=2)
-    plt.plot(reg_params, test_accuracies, 'r-o', label='Test Accuracy', linewidth=2)
-    plt.xscale('log')
-    plt.xlabel('Regularization Parameter (λ)', fontsize=12)
-    plt.ylabel('Accuracy', fontsize=12)
-    plt.title('Validation Curve: Accuracy vs Regularization', fontsize=14, fontweight='bold')
-    plt.legend(fontsize=11)
-    plt.grid(True, alpha=0.3)
-    plt.tight_layout()
-    plt.savefig("figs/validation_curve.png", dpi=300)
-    plt.close()
-    
-    print("Validation curve saved to figs/validation_curve.png")
 
 def contains_devanagari_unicodedata(text):
     for char in text:

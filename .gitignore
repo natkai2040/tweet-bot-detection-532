@@ -12,3 +12,4 @@ runs/test_output
 .pytest_cache/
 sparkapp/__pycache__
 tweets_with_labels.json
+bot_classification_model
