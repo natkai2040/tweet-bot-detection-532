@@ -3,7 +3,7 @@ Runs pipeline on a very small subset of our dataset
 '''
 
 import string
-import sparkapp.pipeline as pipeline
+import pipeline
 from pyspark.sql.session import SparkSession
 import json
 

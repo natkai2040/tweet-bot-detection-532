@@ -10,6 +10,7 @@ tweets_with_labels_test_0.json
 tweets_with_labels_test_1.json
 runs/test_output
 .pytest_cache/
+.vscode/
 sparkapp/__pycache__
 tweets_with_labels.json
-bot_classification_model
+pipeline_model

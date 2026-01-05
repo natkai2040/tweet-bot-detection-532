@@ -8,11 +8,13 @@ from pyspark.sql.functions import map_from_arrays, array, lit, explode, col, whe
 from pyspark.ml.feature import CountVectorizer, IDF, StopWordsRemover
 from pyspark.ml.classification import LogisticRegression
 from pyspark.ml import Pipeline
-from sparkapp.tweet_tokenizer import TweetTokenizerTransformer
+from pyspark.ml.feature import RegexTokenizer
 from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score
 import matplotlib.pyplot as plt
 import numpy as np
 import emoji
+
+TWEET_REGEX = r"(?:@[\w_]+)|(?:\#[\w_]+)|(?:https?://\S+)|(?:\w+(?:'\w+)?)|(?:[^\w\s])"
 
 def preprocess_data(spark: SparkSession, input_json):
     '''
@@ -64,13 +66,15 @@ def preprocess_data(spark: SparkSession, input_json):
 def train_pipeline(spark, df_training):
 
     # First, tokenize to seperate string into list of semantic units
-    # TweetTokenizer pays attention to text such as emoticons and arrows, and combines them into a single unit.
-    tweet_tokenizer = TweetTokenizerTransformer(inputCol="text", outputCol="tokens_no_punc")
+    # RegexTokenizer aims to replicate nltk's TweetTokenizer by keeping @mentions, URL's, hashtags and emojis together
+    # It differs in its inability to shorten elongated words (i.e. sooooo -> so) and preserve text-based emoticons [i.e. :-)]
+    regex_tokenizer = RegexTokenizer(inputCol="text", outputCol="tokens", 
+                                     pattern=TWEET_REGEX, gaps=False, toLowercase=True)
 
     #Removing stopwords
     # Stopwords = common words which don't denote meaning (i.e. a, the, is)
     # Removing these tokens may boost model performance
-    remover = StopWordsRemover(inputCol="tokens_no_punc", outputCol="tokens_no_stops")
+    remover = StopWordsRemover(inputCol="tokens", outputCol="tokens_no_stops")
 
     # Convert tokens w/o stopwords to Term Frequency Vector -> Inverse Doc Frequency Vector
     cv = CountVectorizer(inputCol="tokens_no_stops", outputCol="raw_count")
@@ -78,7 +82,7 @@ def train_pipeline(spark, df_training):
     lr = LogisticRegression(featuresCol="idf_features", labelCol="label")
 
     # Pipeline runs all of the stages inputted in sequence, which processes input string, then inputs it into our model.
-    pipeline = Pipeline(stages=[tweet_tokenizer, remover, cv, idf, lr])
+    pipeline = Pipeline(stages=[regex_tokenizer, remover, cv, idf, lr])
 
     # Training our pipeline model
     # StopWordsRemover is a Transformer, so it doesn't change as a result of training, it always removes a static set of stopwords.
