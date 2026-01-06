@@ -3,8 +3,9 @@ This script provides a pipeline for both training and evaluating text with a Cla
 """
 
 import unicodedata
+import os
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import map_from_arrays, array, lit, explode, col, when
+from pyspark.sql.functions import map_from_arrays, array, lit, explode, col, when, udf
 from pyspark.ml.feature import CountVectorizer, IDF, StopWordsRemover
 from pyspark.ml.classification import LogisticRegression
 from pyspark.ml import Pipeline
@@ -13,15 +14,66 @@ from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, r
 import matplotlib.pyplot as plt
 import numpy as np
 import emoji
+from pyspark.sql.types import StringType
 
-TWEET_REGEX = r"(?:@[\w_]+)|(?:\#[\w_]+)|(?:https?://\S+)|(?:\w+(?:'\w+)?)|(?:[^\w\s])"
+TWEET_REGEX = r"(?:@[\w_]+)|(?:\#[\w_]+)|(?:(?i:https?://)\S+)|(?:(?i:www\.)\S+)|(?:\w+(?:-\w+)*(?:'\w+)?)|(?:[^\w\s])"
+
+def selective_lowercase_text(text):
+    """Lowercase text but preserve URLs"""
+    if not text:
+        return text
+    
+    # Import inside function for better serialization
+    import re
+    
+    # Find all URLs (case-insensitive for the protocol)
+    url_pattern = r'(?i)(https?://\S+|www\.\S+)'
+    matches = list(re.finditer(url_pattern, text))
+    
+    if not matches:
+        # No URLs found, just lowercase everything
+        return text.lower()
+    
+    # Build result by processing text in segments
+    result = []
+    last_end = 0
+    
+    for match in matches:
+        # Add lowercased text before the URL
+        result.append(text[last_end:match.start()].lower())
+        # Add the URL with original case
+        result.append(match.group(0))
+        last_end = match.end()
+    
+    # Add any remaining text after the last URL
+    result.append(text[last_end:].lower())
+    
+    return ''.join(result)
+
+# Create UDF at module level with explicit function reference
+selective_lowercase_udf = udf(selective_lowercase_text, StringType())
 
 def preprocess_data(spark: SparkSession, input_json):
     '''
     Given a JSON in the format defined in data_preprocessing.ipynb (key (tweet ID): {label: "human/bot", tweet: "tweetText}),
     generate a Spark DF which organizes the data into the following columns: [tweet_id, text, label]
     '''
-
+    
+    # Define cache paths
+    cache_dir = "data/preprocessed_cache"
+    cache_train = os.path.join(cache_dir, "train")
+    cache_test = os.path.join(cache_dir, "test")
+    
+    # Check if cached preprocessed data exists
+    if os.path.exists(cache_train) and os.path.exists(cache_test):
+        print("Loading cached preprocessed data...")
+        train_df = spark.read.parquet(cache_train)
+        test_df = spark.read.parquet(cache_test)
+        print(f"Loaded {train_df.count()} training samples and {test_df.count()} test samples from cache")
+        return train_df, test_df
+    
+    print("\nPreprocessing data from scratch...")
+    
     df = spark.read.option("multiline", "true").json(input_json)
     cols = df.columns
 
@@ -32,46 +84,72 @@ def preprocess_data(spark: SparkSession, input_json):
         ).alias("tweets")
     )
 
-    #Flatten json such that a given tweet's object contains tweet_id and data columns
+    # Flatten json such that a given tweet's object contains tweet_id and data columns
     df_flat = df_map.select(explode("tweets").alias("tweet_id", "data"))
 
-    #Rename data columns into two seperate columns, text and label.
+    # Rename data columns into two seperate columns, text and label.
     df_formatted = df_flat.select(
         col("tweet_id"),
         col("data.text").alias("text"),
         col("data.label").alias("label")
     )
 
-    #Encode the label of the data as follows:
+    # Encode the label of the data as follows:
     # HUMAN = 1
     # BOT = 0
     df_final = df_formatted.withColumn("label",
                                          when(col("label") == "human", 1).otherwise(0))
 
-    # split by labels
+    # Split by labels
     human_df = df_final.filter(col("label") == 1)
     bot_df   = df_final.filter(col("label") == 0)
     human_train, human_test = human_df.randomSplit([0.8, 0.2], seed=42)
     bot_train, bot_test     = bot_df.randomSplit([0.8, 0.2], seed=42)
 
-    # combine dfs
+    # Combine dfs
     train_df = human_train.union(bot_train)
     test_df  = human_test.union(bot_test)
 
-    print("Preprocessed Training Data:")
-    # train_df.show(truncate=True)
+    # Apply selective lowercasing using UDF
+    print("Applying selective lowercasing (preserving URL case)...")
+    train_df = train_df.withColumn("text", selective_lowercase_udf(col("text")))
+    test_df = test_df.withColumn("text", selective_lowercase_udf(col("text")))
 
+    # Create cache directory if it doesn't exist
+    os.makedirs(cache_dir, exist_ok=True)
+    
+    # Cache and materialize to execute the UDF transformation
+    print("Materializing transformations...")
+    train_df = train_df.cache()
+    test_df = test_df.cache()
+    
+    train_count = train_df.count()
+    test_count = test_df.count()
+    
+    # Write to parquet for future runs
+    print("Caching preprocessed data for future runs...")
+    train_df.write.mode("overwrite").parquet(cache_train)
+    test_df.write.mode("overwrite").parquet(cache_test)
+    
+    # Read back to break lineage and remove UDF dependency
+    train_df = spark.read.parquet(cache_train)
+    test_df = spark.read.parquet(cache_test)
+
+    print(f"Preprocessed {train_count} training samples and {test_count} test samples")
     return train_df, test_df
 
 def train_pipeline(spark, df_training):
-
+    '''
+    Train a text classification pipeline using logistic regression
+    '''
+    
     # First, tokenize to seperate string into list of semantic units
     # RegexTokenizer aims to replicate nltk's TweetTokenizer by keeping @mentions, URL's, hashtags and emojis together
     # It differs in its inability to shorten elongated words (i.e. sooooo -> so) and preserve text-based emoticons [i.e. :-)]
     regex_tokenizer = RegexTokenizer(inputCol="text", outputCol="tokens", 
-                                     pattern=TWEET_REGEX, gaps=False, toLowercase=True)
+                                     pattern=TWEET_REGEX, gaps=False, toLowercase=False)
 
-    #Removing stopwords
+    # Removing stopwords
     # Stopwords = common words which don't denote meaning (i.e. a, the, is)
     # Removing these tokens may boost model performance
     remover = StopWordsRemover(inputCol="tokens", outputCol="tokens_no_stops")
@@ -89,6 +167,7 @@ def train_pipeline(spark, df_training):
     # CV constructs a vocabulary (a set of all unique tokens present in dataset) and uses it to construct term frequency vectors for each datapoint.
     # IDF learns the static-length vector of IDF weights for each datapoint, which it can create with the vector from CV.
     # LogisticRegression trains a model based on the IDF vector for each datapoint.
+    print("Training pipeline model...")
     model = pipeline.fit(df_training)
 
     # Extract training history
@@ -108,6 +187,9 @@ def plot_training_metrics(training_summary):
     objective_history = training_summary.objectiveHistory
     iterations = list(range(len(objective_history)))
     
+    # Create figs directory if it doesn't exist
+    os.makedirs("figs", exist_ok=True)
+    
     # Figure: Loss over time
     fig, ax = plt.subplots(figsize=(10, 6))
     ax.plot(iterations, objective_history)
@@ -124,7 +206,14 @@ def plot_training_metrics(training_summary):
     print(f"Final loss: {objective_history[-1]:.6f}")
 
 def inference_pipeline(spark, model, df_test):
+    '''
+    Run inference on test data using the trained model
+    '''
+    # Create runs directory if it doesn't exist
+    os.makedirs("runs", exist_ok=True)
+    
     # Running inference on our pipeline model
+    print("Running inference on test data...")
     output_df = model.transform(df_test)    
     output_df.select("label", "prediction") \
             .write.mode("overwrite").csv("runs/test_output")
@@ -132,13 +221,20 @@ def inference_pipeline(spark, model, df_test):
     return output_df
 
 def contains_devanagari_unicodedata(text):
+    '''Check if text contains Devanagari characters'''
     for char in text:
         if 'DEVANAGARI' in unicodedata.name(char, '').upper():
             return True
     return False
 
 def calculate_metrics(df, model, labels=None, outfile="figs/confusion_matrix.png"):
-    #FEATURE IMPORTANCE
+    '''
+    Calculate and visualize model performance metrics
+    '''
+    # Create figs directory if it doesn't exist
+    os.makedirs("figs", exist_ok=True)
+    
+    # FEATURE IMPORTANCE
     tokenizer, remover, cv_model, idf_model, lr_model = model.stages
     vocab = cv_model.vocabulary  
     idf_weights = idf_model.idf.toArray()  
@@ -147,9 +243,6 @@ def calculate_metrics(df, model, labels=None, outfile="figs/confusion_matrix.png
     importances = np.abs(lr_coeffs * idf_weights)
     feature_importance = list(zip(vocab, importances))
     feature_importance = sorted(feature_importance, key=lambda x: x[1], reverse=True)
-    feature_importance = sorted(feature_importance,
-                                key=lambda x: x[1],
-                                reverse=True)
     
     # Filter out Devanagari characters since they can't be displayed in figure
     feature_importance_filtered = [
@@ -173,9 +266,7 @@ def calculate_metrics(df, model, labels=None, outfile="figs/confusion_matrix.png
     plt.savefig("figs/feature_importances.png", dpi=300)
     plt.close()
 
-
-    #ACCURACY, PRECISION, RECALL, CONFUSION MATRIX
-
+    # ACCURACY, PRECISION, RECALL, CONFUSION MATRIX
     predictions = df.select("label", "prediction").collect()
     y_true = [row.label for row in predictions]
     y_pred = [row.prediction for row in predictions]
@@ -185,7 +276,7 @@ def calculate_metrics(df, model, labels=None, outfile="figs/confusion_matrix.png
     recall = recall_score(y_true, y_pred, zero_division=0)
     cm = confusion_matrix(y_true, y_pred, labels=[0, 1])
 
-    #plot
+    # Plot confusion matrix
     fig, ax = plt.subplots(figsize=(6, 5))
     im = ax.imshow(cm, interpolation="nearest")
     ax.figure.colorbar(im, ax=ax)

@@ -9,6 +9,7 @@ tweets_with_labels_test_0_ndjson
 tweets_with_labels_test_0.json
 tweets_with_labels_test_1.json
 runs/test_output
+data/preprocessed_cache
 .pytest_cache/
 .vscode/
 sparkapp/__pycache__
