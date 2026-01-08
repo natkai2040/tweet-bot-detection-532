@@ -1,51 +1,64 @@
-from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, collect_list
-import json
+'''
+Given the Twibot-22 dataset (https://twibot22.github.io/),
+generate new json files in our desired formatting, 
+which stores only the tweet ID, user ID, label (bot/human) and text
+'''
 
-with open("Twibot-22/node_new.json", "r") as f:
+import json
+from collections import defaultdict
+
+twibot_data_dir = "data/Twibot-22"
+# node_new.json contains user and tweet data
+with open(twibot_data_dir + "/node_new.json", "r") as f:
     node_new = json.load(f)
 
-with open("Twibot-22/label_new.json", "r") as f:
+# label_new.json contains labels (bot/human) for each user
+with open(twibot_data_dir + "/label_new.json", "r") as f:
     label_new = json.load(f)
 
-spark = SparkSession.builder.appName("TweetsToUsersJSON").getOrCreate()
+# ------------------------
+# Tweet-level JSON (Each item in json is a single tweet)
+# ------------------------
+tweet_dict = {}
+user_tweets = defaultdict(list)
 
-# ------------------------
-# Prepare tweet records
-# ------------------------
-tweet_records = []
+# Iterate over all nodes (includes both user data nodes AND tweet nodes)
 for tweet_id, tweet_data in node_new.items():
+    # Skip tweet if it has no author (its a user data node)
     if "author_id" not in tweet_data:
         continue
     author_key = "u" + str(tweet_data["author_id"])
+
+    # Skip tweet if it has no author ID (it cannot be labeled as bot/human)
     if author_key not in label_new:
         continue
     label = label_new[author_key]
     text = tweet_data.get("text", "")
-    tweet_records.append((tweet_id, author_key, label, text))  # include tweet_id
 
-df = spark.createDataFrame(tweet_records, ["tweet_id", "user_id", "label", "text"])
+    # Add to tweet dict
+    tweet_dict[tweet_id] = {"label": label, "text": text}
+    # Also collect for user-level aggregation
+    user_tweets[author_key].append(text)
 
-# ------------------------
-# Tweet-level JSON
-# ------------------------
-tweet_dict = {row["tweet_id"]: {"label": row["label"], "text": row["text"]} for row in df.collect()}
-
-with open("tweets_with_labels.json", "w", encoding="utf-8") as f:
+# Write to JSON
+with open("data/tweets_with_labels.json", "w", encoding="utf-8") as f:
     json.dump(tweet_dict, f, ensure_ascii=False, indent=4)
 
 print(f"Saved {len(tweet_dict)} tweets to tweets_with_labels.json")
 
 # ------------------------
-# User-level JSON
+# User-level JSON (Each item in the JSON is a single user)
 # ------------------------
-df_users = df.groupBy("user_id", "label").agg(collect_list("text").alias("tweets"))
+user_dict = {}
+for user_id, tweets in user_tweets.items():
+    # Only generate object if the user is labeled
+    if user_id in label_new:
+        user_dict[user_id] = {
+            "label": label_new[user_id],
+            "tweets": tweets
+        }
 
-user_records = {row["user_id"]: {"label": row["label"], "tweets": tuple(row["tweets"])} for row in df_users.collect()}
+with open("data/users_with_tweets.json", "w", encoding="utf-8") as f:
+    json.dump(user_dict, f, ensure_ascii=False, indent=4)
 
-with open("users_with_tweets.json", "w", encoding="utf-8") as f:
-    json.dump(user_records, f, ensure_ascii=False, indent=4)
-
-print(f"Saved {len(user_records)} users with tweets to users_with_tweets.json")
-
-spark.stop()
+print(f"Saved {len(user_dict)} users with tweets to users_with_tweets.json")

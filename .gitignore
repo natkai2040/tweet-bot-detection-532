@@ -3,6 +3,7 @@ __pycache__/
 data_subset/
 Twibot-22/
 Twibot-20/
+data/users_with_tweets.json
 tweets_with_labels.json
 tweet_0_ndjson_output
 tweets_with_labels_test_0_ndjson
