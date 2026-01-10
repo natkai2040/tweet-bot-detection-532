@@ -15,7 +15,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import emoji
 from pyspark.sql.types import StringType
+import pathlib
 
+# Regular Expression pattern which allows for tweet-aware tokenization (i.e. maintain @ mentions, #, URL's)
 TWEET_REGEX = r"(?:@[\w_]+)|(?:\#[\w_]+)|(?:(?i:https?://)\S+)|(?:(?i:www\.)\S+)|(?:\w+(?:-\w+)*(?:'\w+)?)|(?:[^\w\s])"
 
 def selective_lowercase_text(text):
@@ -60,18 +62,20 @@ def preprocess_data(spark: SparkSession, input_json):
     '''
     
     # Define cache paths
-    cache_dir = "data/preprocessed_cache"
+    json_name = pathlib.Path(input_json).name
+    cache_dir = "data/preprocessed_cache/" + json_name
     cache_train = os.path.join(cache_dir, "train")
     cache_test = os.path.join(cache_dir, "test")
     
     # Check if cached preprocessed data exists
     if os.path.exists(cache_train) and os.path.exists(cache_test):
-        print("Loading cached preprocessed data...")
+        print("Loading cached preprocessed data for " + json_name + "...")
         train_df = spark.read.parquet(cache_train)
         test_df = spark.read.parquet(cache_test)
         print(f"Loaded {train_df.count()} training samples and {test_df.count()} test samples from cache")
         return train_df, test_df
     
+    # If cache doesn't exist, preprocess all data from scratch and then cache it.
     print("\nPreprocessing data from scratch...")
     
     df = spark.read.option("multiline", "true").json(input_json)
@@ -138,7 +142,7 @@ def preprocess_data(spark: SparkSession, input_json):
     print(f"Preprocessed {train_count} training samples and {test_count} test samples")
     return train_df, test_df
 
-def train_pipeline(spark, df_training):
+def train_pipeline(spark, df_training, plot_training_loss=True):
     '''
     Train a text classification pipeline using logistic regression
     '''
@@ -175,7 +179,8 @@ def train_pipeline(spark, df_training):
     training_summary = lr_model.summary
     
     # Plot training metrics
-    plot_training_metrics(training_summary)
+    if plot_training_loss:
+        plot_training_metrics(training_summary)
 
     return model
 
@@ -229,7 +234,7 @@ def contains_devanagari_unicodedata(text):
 
 def calculate_metrics(df, model, labels=None, outfile="figs/confusion_matrix.png"):
     '''
-    Calculate and visualize model performance metrics
+    Calculate and visualize model test performance metrics
     '''
     # Create figs directory if it doesn't exist
     os.makedirs("figs", exist_ok=True)

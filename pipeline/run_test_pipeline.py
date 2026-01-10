@@ -1,47 +1,24 @@
 '''
-Runs pipeline on a very small subset of our dataset
+Runs pipeline on a very small subset of our dataset (dummy_data.json)
+Saves to json file for ease of viewing in /runs dir.
 '''
 
-import string
 import pipeline
 from pyspark.sql.session import SparkSession
-import json
 
 DUMMY_DATA_SUBSET = "data/dummy_data.json"
 
-def modify_test_json():
-    # Load JSON from file
-    with open(DUMMY_DATA_SUBSET, 'r') as f:
-        data = json.load(f)
-
-        # Randomly sampled tweet from json file generated from data_preprocessing.ipynb, data/tweets_with_labels.json
-        data['sampled_test_tweet'] = {
-            'label': 'bot',
-            'text': 'Medical collections are likely less of a tail event than many expect--being both more common and more modest in size than implied by some of the popular discourse.\n\nFor example, in 2020 the median medical collection was $310. https://t.co/hKczgDQ9gP'
-        }
-
-        # Testing handling of punctuation
-        all_punc = string.punctuation + '…' + "’" + '...' + '“' + '”' + '<' + " " + "=" + " " + '>'
-        data['punc_test'] = {
-            'label': 'bot',
-            'text': all_punc
-        }
-
-        # Sanity checking tokenized example provided at https://www.nltk.org/api/nltk.tokenize.casual.html
-        data['api_test_1'] = {
-            'label': 'bot',
-            'text': "This is a cooool #dummysmiley: :-) :-P <3 and some arrows < > -> <--"
-        }
-
-        # Save back to file
-        with open(DUMMY_DATA_SUBSET, 'w') as f:
-            json.dump(data, f, indent=4)
-
 if __name__ == '__main__':
-    modify_test_json()
     spark = SparkSession.builder.appName("TestBotClassifier").getOrCreate()
 
     df_train, df_test = pipeline.preprocess_data(spark, DUMMY_DATA_SUBSET)
 
-    model = pipeline.train_pipeline(spark, df_train)
-    pipeline.inference_pipeline(spark, model, df_test)
+    model = pipeline.train_pipeline(spark, df_train, plot_training_loss=False)
+    output_df = pipeline.inference_pipeline(spark, model, df_test)
+    pdf = output_df.toPandas()
+    
+    results_loc = "runs/dummy_inference.json"
+    pdf.to_json(results_loc, orient="records", indent=2)
+    print("=" * 10)
+    print("Inference results saved to:", results_loc)
+    print("=" * 10)
