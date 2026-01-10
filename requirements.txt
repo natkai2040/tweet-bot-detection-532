@@ -1,0 +1,7 @@
+emoji==2.15.0
+ijson==3.4.0.post0
+matplotlib==3.7.0
+numpy==1.23.5
+pyspark==4.1.1
+pytest==7.1.2
+scikit_learn==1.2.1
