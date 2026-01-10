@@ -1,16 +1,20 @@
 import json
-import string
+import os
+import sys
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, lit, explode, size, avg, udf
+from pyspark.sql.functions import col, lit, explode, size, avg, udf, expr
 from pyspark.sql.types import ArrayType, StringType
-from nltk.corpus import stopwords
-from nltk.tokenize import TweetTokenizer
+from pyspark.ml.feature import RegexTokenizer, StopWordsRemover
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from pipeline.pipeline import TWEET_REGEX, selective_lowercase_udf
 
 # Start Spark
 spark = SparkSession.builder.appName("TweetAnalysisByLabel").getOrCreate()
 
 # Load JSON (dict-of-dicts format)
-with open("tweets_with_labels.json", "r") as f:
+data_dir = "data"
+with open(data_dir + "/tweets_with_labels.json", "r") as f:
     raw = json.load(f)
 
 records = []
@@ -22,24 +26,39 @@ for tweet_id, data in raw.items():
     })
 
 df = spark.createDataFrame(records)
-df.show(truncate=False)
+df = df.withColumn("text", selective_lowercase_udf(col("text")))
 
-# Set up tokenizer & stopwords
-tknzr = TweetTokenizer(preserve_case=False)
+# Tokenize using the same RegexTokenizer
+regex_tokenizer = RegexTokenizer(
+    inputCol="text",
+    outputCol="tokens_raw",
+    pattern=TWEET_REGEX,
+    gaps=False,
+    toLowercase=False 
+)
 
-stops = set(stopwords.words("english"))
-stops.update(string.punctuation)
-stops.update({'…', '’', '...', '“', '”', '‘'})
-stops.update(stopwords.words('spanish'))
+df_tokens = regex_tokenizer.transform(df)
 
-# Define tokenization UDF that removes stopwords
-def tokenize_remove_stops(text):
-    tokens = tknzr.tokenize(text)
-    return [t for t in tokens if t not in stops]
+# Remove stopwords
+remover = StopWordsRemover(
+    inputCol="tokens_raw",
+    outputCol="tokens_no_stops"
+)
 
-tokenize_udf = udf(tokenize_remove_stops, ArrayType(StringType()))
-
-df_tokens = df.withColumn("tokens", tokenize_udf(col("text")))
+df_tokens = remover.transform(df_tokens)
+# Additional Regex Filters keeps only Latin words + emojis
+df_tokens = df_tokens.withColumn(
+    "tokens",
+    expr(
+        "filter(tokens_no_stops, t -> "
+        "t rlike '^[a-z]{2,}$' OR "          # Latin words
+        "t rlike '^\\\\p{So}$' OR "          # emojis / symbols
+        "t rlike '^#[a-z0-9_]{1,}$' OR "     # hashtags
+        "t rlike '^@[a-z0-9_]{1,}$' OR "     # mentions
+        "t rlike '^http\\S+$'"                # URLs
+        ")"
+    )
+)
 
 # Function to compute ngrams
 def make_ngrams(tokens, n):
