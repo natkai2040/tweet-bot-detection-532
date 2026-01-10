@@ -1,4 +1,5 @@
 '''
+Requires the Twibot-22 (https://twibot22.github.io/) to be installed and placed inside the /data directory
 Given the Twibot-22 dataset (https://twibot22.github.io/),
 generate new json files in our desired formatting, 
 which stores only the tweet ID, user ID, label (bot/human) and text

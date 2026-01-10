@@ -1,3 +1,7 @@
+'''
+Single-cluster data preprocessing to create a single json file containing only the attributes we need.
+(tweet_id, label, text), objects are keyed by tweet_id and contain label and text as attributes.
+'''
 import json
 import ijson
 import sys

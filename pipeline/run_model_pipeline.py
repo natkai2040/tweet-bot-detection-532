@@ -1,6 +1,5 @@
 '''
-Runs pipeline on our entire dataset
-For: Ryan <3
+Runs pipeline on our entire dataset (Twibot-22)
 '''
 
 import os
@@ -31,15 +30,16 @@ if not os.path.exists(save_model_path):
 # Preprocess data (uses cache if available)
 df_train, df_test = preprocess_data(spark, data)
 
-# Check if model exists, load it if it does, train and save if it doesn't
+# Check if model exists, load it if it does
 if os.path.exists(save_model_path) and os.listdir(save_model_path):
-    print("\nLoading existing model...")
+    print("Loading existing model...")
     model = PipelineModel.load(save_model_path)
+# Else, the model doesn't exist, train a new model from scratch then save it to save_model_path.
 else:
-    print("\nTraining new model...")
+    print("Training new model...")
     model = train_pipeline(spark, df_train)
     model.write().overwrite().save(save_model_path)
-    print(f"\nModel saved at: {save_model_path}")
+    print(f"Model saved at: {save_model_path}")
 
 # Run inference and calculate metrics
 output = inference_pipeline(spark, model, df_test)

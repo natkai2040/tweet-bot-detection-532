@@ -1,3 +1,7 @@
+'''
+Distributed data preprocessing to create a single ndjson file containing only the attributes we need.
+(tweet_id, label, text)
+'''
 import sys
 import json
 from pyspark.sql import SparkSession
@@ -8,9 +12,9 @@ def main():
         print("Usage: spark-submit label_tweets.py <tweets.ndjson> <labels.json> <output_name>")
         sys.exit(1)
 
-    tweets_path = sys.argv[1]
-    labels_path = sys.argv[2]
-    output_name = sys.argv[3]
+    tweets_path = sys.argv[1]       # e.g., Twibot-22/tweet_0.ndjson
+    labels_path = sys.argv[2]       # e.g., Twibot-22/labels_twibot_22a.json
+    output_name = sys.argv[3]       # e.g., tweet_0_with_labels.ndjson
 
     spark = SparkSession.builder.appName("TweetLabeler").getOrCreate()
 

@@ -1,9 +1,13 @@
+'''
+Converts very large json files which can't fully fit into memory 
+into ndjson files, which are more memory efficient
+'''
 import ijson
 import json
 import sys
 
 input_path = sys.argv[1]  # e.g., Twibot-22/tweet_0.json
-output_path = sys.argv[2] # e.g., tweet_0_with_labels.json
+output_path = sys.argv[2] # e.g., tweet_0_with_labels.ndjson
 
 i = 0
 with open(input_path, "r") as f, open(output_path, "w") as out:

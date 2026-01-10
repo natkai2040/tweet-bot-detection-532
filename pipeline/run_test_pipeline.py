@@ -1,5 +1,6 @@
 '''
-Runs pipeline on a very small subset of our dataset (dummy_data.json)
+Runs pipeline on some dummy data as a sanity check and 
+also to provide insight on each stage of the pipeline model.
 Saves to json file for ease of viewing in /runs dir.
 '''
 

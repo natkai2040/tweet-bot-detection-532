@@ -1,3 +1,8 @@
+'''
+Utilizes PySpark to provide exploratory stats such as 
+dataset size, mean tweet length and most frequent grams, bigrams and trigrams
+'''
+
 import json
 import os
 import sys
