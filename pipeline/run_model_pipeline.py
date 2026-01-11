@@ -20,7 +20,7 @@ spark = SparkSession.builder \
     .config("spark.executor.memory", "8g") \
     .getOrCreate()
 
-# Data is taken from json file generated from data_preprocessing.ipynb, tweets_with_labels.json
+# Data is taken from json file generated from create_jsons.py
 data = "data/tweets_with_labels.json"
 save_model_path = "pipeline_model"
 
