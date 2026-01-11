@@ -214,14 +214,9 @@ def inference_pipeline(spark, model, df_test):
     '''
     Run inference on test data using the trained model
     '''
-    # Create runs directory if it doesn't exist
-    os.makedirs("runs", exist_ok=True)
-    
     # Running inference on our pipeline model
     print("Running inference on test data...")
-    output_df = model.transform(df_test)    
-    output_df.select("label", "prediction") \
-            .write.mode("overwrite").csv("runs/test_output")
+    output_df = model.transform(df_test)
 
     return output_df
 
