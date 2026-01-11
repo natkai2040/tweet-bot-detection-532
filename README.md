@@ -3,7 +3,37 @@
 An **End-to-end ML Twitter bot detection pipeline** built with PySpark, which classifies if an author of a tweet is a bot given only text, 
 without social media metric data (i.e. likes, retweets, time posted, etc.).
 
-## Overview
+# 📊 Results
+
+## Performance Metrics
+
+<table align="center">
+<tr>
+<td width="50%">
+
+| Metric | Score |
+|--------|-------|
+| **Accuracy** | 86.59% |
+| **Precision** | 91.27% |
+| **Recall** | 90.55% |
+
+**Dataset:** ~30,000 tweets  
+**Model:** Logistic Regression (PySpark ML)
+
+</td>
+<td width="50%">
+
+<img alt="Confusion Matrix" src="https://github.com/user-attachments/assets/9b904161-b1d5-4a4b-80c8-3f33eec8efe1" />
+
+</td>
+</tr>
+</table>
+
+Despite using a simple model architecture, our PySpark-based pipeline achieves strong classification performance while maintaining scalability for larger datasets.
+
+📁 View all visualizations in the [figs directory](https://github.com/natkai2040/tweet-bot-detection-532/tree/main/figs)
+
+# 🔄 Overview
 The pipeline performs:
 
 1. Ingestion of JSON data to be converted into Spark Dataframes
